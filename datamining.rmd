@@ -1,0 +1,229 @@
+---
+title: "data classification"
+author: "Boughanmi Jasser  Rafik Amri et Fedi Hamdi"
+date: "08 novembre 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(FactoMineR)
+library(factoextra)
+library(cluster)
+library(plotrix)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+glass=read.csv(file="C:/Users/Jawaher/Documents/Projet Data-Mining/DMPC/glass.csv",header=T,sep=",",dec=".")
+#View(glass)
+
+```
+
+Il s'agit d'un ensemble de donnees d'identification sur verre de l'UCI. Il contient 10 attributs, y compris id. La r?ponse est de type verre (7 valeurs discr?tes)
+Contenu
+Informations d'attribut:
+
+1)id: 1 à 214 
+2)RI: indice de refraction
+3)Na: Sodium (unité de mesure: pourcentage en poids dans l'oxyde correspondant, ainsi que les attributs 4 a 10)
+4)Mg: Magnesium
+5)Al: Aluminium
+6)Si: silicium
+7)K: Potassium
+8)Ca: calcium
+9)Ba: Baryum
+10)Fe: fer
+11)Type de verre: (attribut de classe) - 1 building_windows_float_processed - 2 building_windows_non_float_processed - 3 vehicle_windows_float_processed - 4 vehicle_windows_non_float_processed (aucun dans cette base de donn?es) - 5 containers - 6 lampes de table - 7 lampes frontales
+
+```{r Stat des}
+summary(glass) #analyse de donnee
+plot(glass$Type) #donnee le graphe de variable
+# Histogramme avec la courbe de distribution
+ggplot(glass, aes(x=glass$Type)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="grey")+
+ geom_density(alpha=.2, fill="#FF6666") 
+barplot(glass$Type) #graphe en barre
+
+j1=ggplot(glass,aes(x=glass$Type,y=glass$RI))+geom_boxplot()
+j2=ggplot(glass,aes(x=glass$Type,y=glass$Na))+geom_boxplot()
+j3=ggplot(glass,aes(x=glass$Type,y=glass$Mg))+geom_boxplot()
+j4=ggplot(glass,aes(x=glass$Type,y=glass$Al))+geom_boxplot()
+j5=ggplot(glass,aes(x=glass$Type,y=glass$Ba))+geom_boxplot()
+j6=ggplot(glass,aes(x=glass$Type,y=glass$Si))+geom_boxplot()
+j7=ggplot(glass,aes(x=glass$Type,y=glass$Ca))+geom_boxplot()
+j8=ggplot(glass,aes(x=glass$Type,y=glass$Si))+geom_boxplot()
+j9=ggplot(glass,aes(x=glass$Type,y=glass$Fe))+geom_boxplot()
+
+grid.arrange(j1,j2,j3,j4,j5,j6,j7,j8,j9)
+```
+
+## ACP
+
+```{r ACP, , echo=FALSE}
+res.pca=PCA(glass)
+res.pca$eig #valeurs propres
+fviz_screeplot(res.pca) #ebloui des valeurs propres
+#representation des individus
+fviz_pca_ind(res.pca,geom=c("point","test"),col.ind="cos2")+
+scale_color_gradient2(low="blue",mid="white",high="red",midpoint=0.5)
+fviz_pca_var(res.pca,col.var="cos2")
+fviz_pca_ind(res.pca,col.ind ="cos2")
+fviz_pca_ind(res.pca , habillage =10,addEllipses = T)
+```
+#Classification Hiérarchique (CAH)
+```{r cah}
+#centrage reduction des donnees
+#pour eviter que variables a forte variance pésent indément sur les résultats
+glass.cr <- scale(glass,center=T,scale=T)
+#matrice des distances entre individus
+d.glass <- dist(glass.cr)
+#CAH - critere de Ward
+#method =  ward.D2  correspond au vrai critere de Ward
+#utilisant le carre de la distance
+cah.ward <- hclust(d.glass,method="ward.D2")
+#affichage dendrogramme
+plot(cah.ward) 
+cah.ward<-as.hclust(cah.ward)
+plot(rev(cah.ward$height), type="h", ylab="hauteurs",xlim = c(1,10))
+
+```
+
+Le dendrogramme suggére un découpage en 2 groupes car on a une descente importante au niveau de 2eme decoupage mais on peut retenir le decoupage en 7 classes car elle explique mieux le modéle.On note
+qu'une classe de verres, le classe 7 <<lampes frontales>> (tout a gauche), se
+d?marque fortement des autres au point qu'on aurait pu envisager aussi un
+d?coupage en 2 groupes seulement
+```{r raison}
+library(NbClust)
+res_nbclust<-NbClust(scale(glass[-10]),min.nc = 2, max.nc =10,index="silhouette",method = "kmeans")
+
+
+res_nbclust$All.index
+
+res_nbclust$Best.nc[1]#la meilleur partition
+```
+L'indice numero 7 donnée par "NbClust" apporte le plus d'information en terme d'inertie c'est à dire si on va couper on admette alors qu'on a 7 classes
+```{r decoupage en classes}
+#découpage en 7 groupes
+groupes.cah <- cutree(cah.ward,k=7)
+#liste des groupes
+print(sort(groupes.cah))
+
+```
+#Methodes de K-Means
+```{r kmeans}
+
+#k-means avec les données centrées et réduites
+#center = 7 - nombre de groupes demandés
+#nstart = 5 - nombre d'essais avec differents individus de départ
+#parce que les résultats sont dépendants de l'initialisation
+groupes.kmeans <- kmeans(glass.cr,centers=7,nstart=5)
+#affichage des résultats
+print(groupes.kmeans)
+#correspondance avec les groupes de la CAH
+print(table(groupes.cah,groupes.kmeans$cluster))
+library(fossil,warn.conflicts = FALSE)
+
+
+```
+Le groupe 3  de la CAH coincide avec le groupe 1 des
+K-Means et le groupe 6 coincide avec le groupe 2 . Apres, il y a certes des correspondances,
+mais elles ne sont pas exactes.
+```{r deter}
+#"Degre d'adequation" 
+rand.index(groupes.cah,groupes.kmeans$cluster)
+
+```
+
+"rand.index" permet d'evaluer le degré d'adéquation[ 90% ] entre les deux méthodes de partition à savoir la classification hiérarchique (CAH) et K-means.
+
+
+```{r som}
+#kohonen library
+library(kohonen)
+# - grille hexagonale
+grille <- som(as.matrix(glass[-10]),grid=somgrid(7,1,"hexagonal"))
+#degradé de bleu pour les couleurs des noeuds
+degrade.bleu <- function(n){
+return(rgb(0,0.4,1,alpha=seq(1/n,1,1/n)))
+}
+```
+Nous avons demandé une grille hexagonale de taille 4 x 2 avec, option par défaut de la fonction som() pour ce type d’architecture, une structure de voisinage circulaire 
+```{r suite som}
+#nombre d'observations dans les cellules
+plot(grille,type="count",palette.name=degrade.bleu)
+summary(grille)
+print(grille$grid)
+
+```
+Le champ « $pts » attire notre attention. Les nœuds de la carte sont indexés de 1 à 8 (4 colonnes x 2 lignes = 8 cellules). Une coordonnée ligne (x) et colonne (y) est associée à chacun d’entre eux . Il est donc possible de calculer des statistiques descriptives relatives aux nœuds en les situant dans l’espace de représentation. Même si ce n’est pas très courant, on pourrait par exemple calculer un cercle de corrélation pour identifier les trajectoires dans la carte topologique. 
+```{r noob}
+print(grille$unit)
+```
+Le premier individu est affecté au noeud n° 4, le second au n° 2, …, le dernier au n°4.Nous pouvons ainsi comptabiliser les individus dans chaque noeud avec table(). 
+##nombre d’observations affectés à chaque noeud 
+```{r table}
+nb <- table(grille$unit.classif) 
+print(nb)
+
+```
+Il y a 5 individus dans le noeud n°1, 57 dans le n°2 ....
+```{r suite som 2}
+#profil des cellules - codebook
+plot(grille,type="codes",codeRendering = "segments")
+
+
+```
+ce type de graphique permet d’établir le rôle des variables dans la définition des différentes zones qui composent la carte topologique. Il est crucial dans l’interprétation des résultats. 
+Codebook vectors. Ce graphique représente les vecteurs de poids (le profil) de chaque noeud dans un diagramme circulaire.
+
+Il permet de distinguer en un coup d’oeil la nature des différentes zones de la carte au regard des variables actives .  on peut se rendre compte que la partie nord-ouest est plutôt caractérisée par les valeurs élevées des variables (Si, Al et Na), le sud est plutôt associé aux variables intermédiaires (en vert), la partie sud-est serait relative aux dernières variables (Ba et RI).
+Nous affichons les codebooks pour les deux premiers noeuds. 
+tableau des codebooks pour les deux premiers noeuds 
+```{r codebook}
+grille$codes=as.data.frame(grille$codes)
+print(grille$codes[1:3,])
+```
+Les valeurs des variables sont comparables d’un noeud à l’autre.
+On peut difficilement disserter à partir de deux noeuds, mais il semble que le coin sud-ouest à son extrémité – les cellules n°1 et 2 sont les premières en partant du bas et à gauche de la carte – soit caractérisé par les valeurs élevées  des variables Si, Na, Ca et Mg
+
+```{r classification}
+#distance entre noeuds en utilisant les codebooks
+d <- dist(grille$codes)
+#cah - saut maximum
+#le poids des noeuds est ignoré ici
+cah <- hclust(d,method="ward.D2",members = nb)
+plot(cah)
+
+#découpage en 7 classes
+groupes <- cutree(cah,k=6)
+groupes
+#matérialisation des classes dans la carte topologique
+plot(grille,type="mapping",bgcol=c("steelblue1","sienna1","yellowgreen","grey","blue","yellow","red")[groupes])
+add.cluster.boundaries(grille,clustering=groupes)
+```
+les noeuds sont constitués d’individus. Ils n’ont pas tous le même poids. 
+Il faut en tenir compte lors du calcul du critère de Ward.
+
+Classification automatique à partir de la carte Regroupement des noeuds. Pouvoir enchaîner avec une classification automatique est un des intérêts des cartes topologiques de Kohonen. En effet, nous disposons d’une représentation 2D des observations avec des zones et des proximités que l’on sait caractériser avec les variables. Les noeuds constituent un excellent point de départ pour un regroupement itératif en classes. La classification ascendante hiérarchique (CAH) est souvent mise à contribution dans ce contexte. Nous calculons la distance entre les noeuds (entre les codebooks) dans la carte (dist), puis nous effectuons une CAH (hclust) avec le critère de Ward (carré de la distance entre centres de classes) (method = « ward.D2 »).
+```{r affectation}
+ind.groupe <- groupes[grille$unit.classif] 
+options(max.print = 30)
+
+print(ind.groupe)
+
+```
+# La comparaison entre les differentes méthodes de classification
+```{r comparaison des methodes som et kmeans}
+
+rand.index(groupes.kmeans$cluster,grille$unit.classif)
+```
+```{r comparaison des methodes som et CAH}
+print("SOM et CAH")
+rand.index(groupes.cah,grille$unit.classif)
+print("SOM et les classes de base")
+rand.index(glass$Type,grille$unit.classif)
+print("CAH et les classes de base")
+rand.index(glass$Type,groupes.cah)
+print("K-means et les classes de base")
+rand.index(glass$Type,groupes.kmeans$cluster)
+```
+
