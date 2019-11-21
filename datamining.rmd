@@ -1,6 +1,6 @@
 ---
 title: "data classification"
-author: "Boughanmi Jasser  Rafik Amri et Fedi Hamdi"
+author: "Fedi Hamdi"
 date: "08 novembre 2019"
 output: pdf_document
 ---
